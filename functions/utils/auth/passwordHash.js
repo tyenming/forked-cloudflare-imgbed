@@ -138,27 +138,26 @@ export async function verifyPassword(inputPassword, storedPassword) {
         const expectedHash = await hashPasswordSHA256(inputPassword, salt);
         return timingSafeEqual(expectedHash, storedPassword);
     } else {
-        // 存储的是明文密码，直接比对（向后兼容）
-        return inputPassword === storedPassword;
+        // 存储的是明文密码，使用恒定时间比较（向后兼容）
+        return timingSafeEqual(inputPassword, storedPassword);
     }
 }
 
 /**
  * 恒定时间字符串比较，防止时序攻击
+ * Always iterates over the full max-length to avoid leaking length information.
  * @param {string} a
  * @param {string} b
  * @returns {boolean}
  */
 function timingSafeEqual(a, b) {
-    if (a.length !== b.length) {
-        return false;
-    }
     const encoder = new TextEncoder();
     const bufA = encoder.encode(a);
     const bufB = encoder.encode(b);
-    let result = 0;
-    for (let i = 0; i < bufA.length; i++) {
-        result |= bufA[i] ^ bufB[i];
+    const maxLen = Math.max(bufA.length, bufB.length);
+    let result = bufA.length ^ bufB.length;
+    for (let i = 0; i < maxLen; i++) {
+        result |= (bufA[i] || 0) ^ (bufB[i] || 0);
     }
     return result === 0;
 }

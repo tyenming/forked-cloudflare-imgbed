@@ -17,11 +17,32 @@ function withDefaultCacheControl(response) {
   });
 }
 
+/**
+ * Override wildcard CORS origins on manage responses with the reflected request origin.
+ * Individual handler files may still set 'Access-Control-Allow-Origin: *';
+ * this middleware rewrites them so the browser enforces same-origin policy.
+ */
+async function corsOverride(context) {
+  const response = await context.next();
+  const origin = context.request.headers.get('Origin') || '';
+  const headers = new Headers(response.headers);
+  if (headers.get('Access-Control-Allow-Origin') === '*') {
+    headers.set('Access-Control-Allow-Origin', origin);
+    headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 async function errorHandling(context) {
   try {
     return withDefaultCacheControl(await context.next());
   } catch (err) {
-    return new Response(`${err.message}\n${err.stack}`, {
+    console.error('Manage API error:', err.message, err.stack);
+    return new Response('Internal Server Error', {
       status: 500,
       headers: {
         'Cache-Control': DEFAULT_MANAGE_CACHE_CONTROL,
@@ -62,20 +83,28 @@ function extractRequiredPermission(pathname) {
   return 'manage';
 }
 
-// CORS 跨域响应头
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400',
-};
+/**
+ * Build CORS headers that reflect the request Origin instead of allowing '*'.
+ * This prevents arbitrary websites from making credentialed cross-origin
+ * requests to admin endpoints.
+ */
+function buildCorsHeaders(request) {
+  const origin = request.headers.get('Origin') || '';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT, PATCH, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
+  };
+}
 
 async function authentication(context) {
   // OPTIONS 预检请求不需要鉴权，直接返回 CORS 响应
   if (context.request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: corsHeaders
+      headers: buildCorsHeaders(context.request)
     });
   }
 
@@ -96,4 +125,4 @@ async function authentication(context) {
   return context.next();
 }
 
-export const onRequest = [errorHandling, authentication];
+export const onRequest = [errorHandling, authentication, corsOverride];

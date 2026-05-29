@@ -3,6 +3,18 @@ import { fetchOthersConfig } from "../utils/sysConfig";
 import { getDatabase } from "../utils/databaseAdapter";
 import { createApiToken } from "../api/manage/apiTokens";
 
+function timingSafeCompare(a, b) {
+    const encoder = new TextEncoder();
+    const bufA = encoder.encode(a);
+    const bufB = encoder.encode(b);
+    const maxLen = Math.max(bufA.length, bufB.length);
+    let result = bufA.length ^ bufB.length;
+    for (let i = 0; i < maxLen; i++) {
+        result |= (bufA[i] || 0) ^ (bufB[i] || 0);
+    }
+    return result === 0;
+}
+
 export async function onRequest(context) {
     const { request, env } = context;
 
@@ -82,8 +94,11 @@ async function checkAuth(request, env) {
         return new Response('Malformed Authorization header', { status: 400 });
     }
 
-    const [user, pass] = atob(encoded).split(':');
-    if (user !== davUser || pass !== davPass) {
+    const decoded = atob(encoded);
+    const colonIndex = decoded.indexOf(':');
+    const user = colonIndex >= 0 ? decoded.substring(0, colonIndex) : decoded;
+    const pass = colonIndex >= 0 ? decoded.substring(colonIndex + 1) : '';
+    if (!timingSafeCompare(user, davUser) || !timingSafeCompare(pass, davPass)) {
         return new Response('Invalid credentials', { status: 403 });
     }
 

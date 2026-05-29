@@ -21,12 +21,14 @@ export function createResponse(body, options = {}) {
     });
 }
 
-// 生成短链接
+// 生成短链接（使用密码学安全的随机数）
 export function generateShortId(length = 8) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const randomBytes = new Uint8Array(length);
+    crypto.getRandomValues(randomBytes);
     let result = '';
     for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+        result += chars.charAt(randomBytes[i] % chars.length);
     }
     return result;
 }

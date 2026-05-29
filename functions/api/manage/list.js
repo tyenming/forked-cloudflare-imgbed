@@ -3,6 +3,7 @@ import {
     getIndexInfo, getIndexStorageStats
 } from '../../utils/indexManager.js';
 import { getDatabase } from '../../utils/databaseAdapter.js';
+import { stripSensitiveMetadata } from '../../utils/metadataSanitizer.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -176,7 +177,7 @@ export async function onRequest(context) {
         // 转换文件格式
         const compatibleFiles = result.files.map(file => ({
             name: file.id,
-            metadata: file.metadata
+            metadata: stripSensitiveMetadata(file.metadata)
         }));
 
         return new Response(JSON.stringify({
@@ -237,7 +238,10 @@ async function getAllFileRecords(env, dir) {
                     continue;
                 }
 
-                allRecords.push(item);
+                allRecords.push({
+                    ...item,
+                    metadata: stripSensitiveMetadata(item.metadata)
+                });
             }
 
             if (!cursor) break;
